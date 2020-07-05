@@ -1,0 +1,45 @@
+#  To run in the foreground
+#  > docker-compose up
+#
+#  To run in the background and tail the logs
+#  > docker-compose up -d
+#  > docker-compose logs -f
+#
+#  Subsequent builds for any changes in dockerfile.
+#  > docker-compose build
+
+version: "3"
+services:
+  minio:
+    image: minio/minio
+    ports:
+      - ${S3_PORT}:9000
+    volumes:
+      - minio:/root/.minio/
+    environment:
+      MINIO_ACCESS_KEY: ${S3_ACCESS_ID}
+      MINIO_SECRET_KEY: ${S3_SECRET_KEY}
+      MINIO_BUCKET: ${S3_BUCKET}
+    command: server /export
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+  createbuckets:
+    image: minio/mc
+    restart: on-failure
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      /usr/bin/mc config host add myminio http://minio:${S3_PORT} ${S3_ACCESS_ID} ${S3_SECRET_KEY};
+      /usr/bin/mc rm -r --force myminio/${S3_BUCKET};
+      /usr/bin/mc mb myminio/${S3_BUCKET};
+      /usr/bin/mc policy set public myminio/${S3_BUCKET};
+      exit 0;
+      "
+
+volumes:
+  minio:
